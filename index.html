@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%84%3C/text%3E%3C/svg%3E">
+<title>Nexus PDF Editor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0b10; --panel:#12141d; --panel2:#191c28; --line:#262b3b;
+  --text:#eef0f7; --sub:#8890a6; --accent:#7c9cff; --accent2:#63e6c4; --warn:#ffb454; --danger:#ff6b7a;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:
+    radial-gradient(circle at 15% 10%, rgba(124,156,255,.15), transparent 40%),
+    radial-gradient(circle at 85% 30%, rgba(99,230,196,.10), transparent 45%),
+    var(--bg);
+  color:var(--text); font-family:'Sora',system-ui,sans-serif; min-height:100vh;
+  display:flex; flex-direction:column;
+}
+header{
+  padding:16px 24px; display:flex; align-items:center; gap:14px;
+  border-bottom:1px solid var(--line); background:rgba(18,20,29,.75); backdrop-filter:blur(10px);
+  position:sticky; top:0; z-index:30;
+}
+.logo{font-weight:800; font-size:17px; letter-spacing:.01em}
+.logo span{background:linear-gradient(90deg,var(--accent),var(--accent2)); -webkit-background-clip:text; background-clip:text; color:transparent}
+.credit{margin-left:auto; font-size:11px; color:var(--sub)}
+
+/* Landing / upload */
+#landing{flex:1; display:flex; align-items:center; justify-content:center; padding:40px 20px}
+.drop{
+  width:min(560px,90vw); border:2px dashed var(--line); border-radius:20px; padding:56px 30px;
+  text-align:center; cursor:pointer; background:linear-gradient(160deg,var(--panel),var(--panel2));
+  transition:.2s; position:relative; overflow:hidden;
+}
+.drop:hover, .drop.drag{border-color:var(--accent); transform:translateY(-2px); box-shadow:0 18px 50px -20px rgba(124,156,255,.5)}
+.drop .big{font-size:38px; margin-bottom:10px}
+.drop h2{margin:6px 0 6px; font-size:20px}
+.drop p{color:var(--sub); font-size:13px; margin:0}
+input[type=file]{display:none}
+
+/* Workspace */
+#workspace{display:none; flex:1; min-height:0}
+#workspace.active{display:flex}
+.toolbar{
+  width:74px; flex-shrink:0; border-right:1px solid var(--line); background:var(--panel);
+  display:flex; flex-direction:column; align-items:center; gap:8px; padding:14px 0;
+}
+.tool{
+  width:48px; height:48px; border-radius:12px; border:1px solid transparent; background:var(--panel2);
+  color:var(--sub); display:flex; align-items:center; justify-content:center; font-size:19px; cursor:pointer; transition:.15s;
+}
+.tool:hover{color:var(--text); border-color:var(--line)}
+.tool.active{background:linear-gradient(135deg,var(--accent),#5b7fe0); color:#0a0b10; box-shadow:0 6px 18px -6px rgba(124,156,255,.6)}
+.tool small{display:block; font-size:9px; margin-top:2px}
+.divider{width:32px; height:1px; background:var(--line); margin:4px 0}
+
+.center{flex:1; display:flex; flex-direction:column; min-width:0}
+.topbar{
+  display:flex; align-items:center; gap:10px; padding:10px 18px; border-bottom:1px solid var(--line);
+  background:var(--panel); flex-wrap:wrap;
+}
+.pill{
+  display:flex; align-items:center; gap:6px; background:var(--panel2); border:1px solid var(--line);
+  border-radius:999px; padding:5px 12px; font-size:12.5px;
+}
+.iconbtn{background:none; border:none; color:var(--text); cursor:pointer; font-size:15px; padding:2px 6px; border-radius:6px}
+.iconbtn:hover{background:var(--line)}
+.iconbtn:disabled{opacity:.3; cursor:not-allowed}
+.btn{background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:9px; padding:8px 15px; font-size:13px; cursor:pointer; font-family:inherit}
+.btn.primary{background:linear-gradient(135deg,var(--accent2),var(--accent)); color:#08110d; font-weight:700; border:none; box-shadow:0 8px 22px -10px rgba(99,230,196,.6)}
+.btn:hover{filter:brightness(1.08)}
+.spacer{flex:1}
+
+#stage{flex:1; overflow:auto; display:flex; justify-content:center; padding:34px; position:relative}
+#pageCard{
+  position:relative; background:#fff; box-shadow:0 30px 70px -30px rgba(0,0,0,.7); border-radius:2px;
+}
+.run{
+  position:absolute; color:transparent; caret-color:#7c9cff; white-space:pre; cursor:text;
+  border-radius:2px; outline:none;
+}
+.run:hover{background:rgba(124,156,255,.14); box-shadow:0 0 0 1px rgba(124,156,255,.5)}
+.run.focused{background:#fff; color:#111; box-shadow:0 0 0 2px var(--accent); z-index:6}
+.addbox{position:absolute; color:#111; background:rgba(255,255,255,.9); outline:2px dashed var(--accent); padding:1px 3px; white-space:pre; cursor:text}
+.markbox{position:absolute; pointer-events:none; border-radius:1px}
+.markbox.highlight{background:rgba(255,224,71,.45)}
+.markbox.redact{background:#0a0b10}
+.rubber{position:absolute; border:1.5px dashed var(--accent); background:rgba(124,156,255,.15); pointer-events:none}
+
+#floatToolbar{
+  position:absolute; display:none; gap:4px; background:var(--panel); border:1px solid var(--line);
+  border-radius:10px; padding:6px; box-shadow:0 14px 30px -14px rgba(0,0,0,.6); z-index:40; align-items:center;
+}
+#floatToolbar button, #floatToolbar select, #floatToolbar input[type=color]{
+  background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:6px; height:28px; cursor:pointer; font-size:12px;
+}
+#floatToolbar input[type=color]{width:28px; padding:0}
+#floatToolbar select#ftFont{width:98px}
+#floatToolbar button.toggle.on{background:var(--accent); color:#0a0b10}
+
+#aiPanel{
+  position:fixed; top:0; right:-340px; width:320px; height:100%; background:var(--panel);
+  border-left:1px solid var(--line); z-index:50; transition:.25s; padding:18px; overflow-y:auto;
+}
+#aiPanel.open{right:0}
+#aiPanel h3{margin:0 0 4px; font-size:15px}
+#aiPanel p.sub{color:var(--sub); font-size:12px; margin-top:0}
+#aiPanel input[type=password]{width:100%; background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:8px; padding:8px; font-size:12.5px; margin:8px 0}
+#aiPanel textarea{width:100%; min-height:70px; background:var(--panel2); border:1px solid var(--line); color:var(--text); border-radius:8px; padding:8px; font-family:inherit; font-size:12.5px; resize:vertical}
+#aiChat{background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:10px; font-size:12.5px; white-space:pre-wrap; min-height:70px; margin:8px 0; color:var(--sub); max-height:220px; overflow-y:auto}
+.agentCard{border:1px solid var(--line); border-radius:10px; padding:12px; margin:14px 0; background:var(--panel2)}
+.agentCard h4{margin:0 0 4px; font-size:13px}
+.agentCard p{margin:0 0 8px; font-size:11.5px; color:var(--sub)}
+#closeAi{position:absolute; top:14px; right:14px; background:none; border:none; color:var(--sub); font-size:16px; cursor:pointer}
+
+.right{
+  width:170px; flex-shrink:0; border-left:1px solid var(--line); background:var(--panel); padding:14px;
+  display:flex; flex-direction:column; gap:6px; overflow-y:auto;
+}
+.pagebtn{
+  padding:7px; border-radius:8px; font-size:12.5px; text-align:center; cursor:pointer; color:var(--sub); border:1px solid transparent;
+}
+.pagebtn.active{background:var(--panel2); border-color:var(--accent); color:var(--text); font-weight:600}
+.pagebtn:hover{color:var(--text)}
+
+@media (max-width:820px){
+  .right{display:none}
+  .toolbar{width:58px}
+  .tool{width:40px; height:40px; font-size:16px}
+  #stage{padding:14px; padding-bottom:90px}
+  #floatToolbar{
+    position:fixed!important; left:0!important; right:0!important; bottom:0!important; top:auto!important;
+    width:100%; border-radius:16px 16px 0 0; justify-content:center; flex-wrap:wrap;
+    padding:10px 8px calc(10px + env(safe-area-inset-bottom,0px)); box-shadow:0 -12px 30px -10px rgba(0,0,0,.6);
+  }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">NEXUS<span>PDF</span></div>
+  <div class="credit">Designed &amp; Developed by NIKHIL CHARY SRIRAMOJU</div>
+</header>
+
+<div id="landing">
+  <div class="drop" id="drop">
+    <div class="big">📄✨</div>
+    <h2>Drop a PDF to start editing</h2>
+    <p>Click text to rewrite it right where it sits · highlight · redact · add new text · export a clean PDF</p>
+    <input type="file" id="fileInput" accept=".pdf">
+  </div>
+</div>
+
+<div id="workspace">
+  <div class="toolbar">
+    <div class="tool active" data-tool="select" title="Edit text">✎<small>Edit</small></div>
+    <div class="tool" data-tool="add" title="Add text">＋<small>Text</small></div>
+    <div class="tool" data-tool="highlight" title="Highlight">🖍<small>Mark</small></div>
+    <div class="tool" data-tool="redact" title="Redact">▬<small>Redact</small></div>
+    <div class="divider"></div>
+    <div class="tool" id="undoBtn" title="Undo">↺</div>
+    <div class="tool" id="redoBtn" title="Redo">↻</div>
+    <div class="divider"></div>
+    <div class="tool" id="rotateBtn" title="Rotate page">⤾<small>Rotate</small></div>
+    <div class="tool" id="deletePageBtn" title="Delete page">✕<small>Del pg</small></div>
+    <div class="divider"></div>
+    <div class="tool" id="aiToolBtn" title="AI Agent">🤖<small>Agent</small></div>
+    <div class="tool" id="findBtn" title="Find &amp; Replace">🔎<small>Find</small></div>
+  </div>
+
+  <div class="center">
+    <div class="topbar">
+      <div class="pill"><button class="iconbtn" id="zoomOut">－</button><span id="zoomLabel">130%</span><button class="iconbtn" id="zoomIn">＋</button></div>
+      <div class="pill"><button class="iconbtn" id="prevPage">◀</button><span id="pageLabel">1 / 1</span><button class="iconbtn" id="nextPage">▶</button></div>
+      <div class="spacer"></div>
+      <button class="btn" id="newFileBtn">Open another PDF</button>
+      <button class="btn primary" id="exportBtn">⬇ Export PDF</button>
+      <span id="status" style="font-size:12px;color:var(--accent2)"></span>
+    </div>
+    <div id="stage">
+      <div id="pageCard">
+        <canvas id="pdfCanvas"></canvas>
+        <div id="overlay" style="position:absolute;top:0;left:0"></div>
+      </div>
+      <div id="floatToolbar">
+        <select id="ftFont">
+          <option value="Helvetica">Helvetica</option>
+          <option value="TimesRoman">Times Roman</option>
+          <option value="Courier">Courier</option>
+        </select>
+        <button id="ftBold" class="toggle" title="Bold"><b>B</b></button>
+        <button id="ftItalic" class="toggle" title="Italic"><i>I</i></button>
+        <button id="ftSmaller">A－</button><button id="ftBigger">A＋</button>
+        <select id="ftAlign"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select>
+        <input type="color" id="ftColor" value="#000000">
+        <button id="ftDelete" title="Clear text">🗑</button>
+        <button id="ftExport" title="Export PDF" style="background:linear-gradient(135deg,var(--accent2),var(--accent));color:#08110d;font-weight:700;padding:0 10px">⬇ Export</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="right" id="pageList"></div>
+</div>
+
+<div id="aiPanel">
+  <button id="closeAi">✕</button>
+  <h3>🤖 AI Agent</h3>
+  <p class="sub">Runs in your browser only. Nothing in this document is uploaded anywhere by these tools.</p>
+
+  <div class="agentCard">
+    <h4>Auto-redact PII</h4>
+    <p>Scans the extracted text on every page for emails, phone numbers and card-like number patterns, and drops a redaction box on each match — no API key needed.</p>
+    <button class="btn primary" id="runRedactAgent" style="width:100%">Scan &amp; redact this document</button>
+    <div id="agentStatus" style="font-size:11.5px;color:var(--accent2);margin-top:6px"></div>
+  </div>
+
+  <div class="agentCard">
+    <h4>Ask about this document</h4>
+    <p>Bring your own Anthropic API key (stored only in this browser). Sends the extracted text as context — a lightweight retrieval step, not a hosted service.</p>
+    <input type="password" id="apiKeyInput" placeholder="sk-ant-…">
+    <textarea id="aiPrompt" placeholder="e.g. Summarize this document, or find every date mentioned"></textarea>
+    <button class="btn primary" id="askAiBtn" style="width:100%;margin-top:6px">Ask</button>
+    <div id="aiChat">Answers appear here.</div>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const $=id=>document.getElementById(id);
+let pdfBytes=null, pdfDoc=null, pageNum=1, scale=1.3;
+let state={}; // {pageIdx:{edits:[],adds:[],marks:[]}}
+let history=[], future=[];
+let tool='select';
+let focusedRun=null, focusedType=null; // type: 'run' | 'add'
+let pageOps={rotations:{}, deleted:{}}; // pageIdx -> degrees / true
+function fontCss(f){ return f==='TimesRoman' ? "'Times New Roman',serif" : f==='Courier' ? "'JetBrains Mono',monospace" : "Helvetica,Arial,sans-serif"; }
+
+function pageState(p){ p=p??pageNum-1; if(!state[p]) state[p]={edits:[],adds:[],marks:[]}; return state[p]; }
+function snapshot(){ history.push(JSON.parse(JSON.stringify(state))); if(history.length>40) history.shift(); future=[]; }
+function undo(){ if(!history.length) return; future.push(JSON.parse(JSON.stringify(state))); state=history.pop(); renderPage(); }
+function redo(){ if(!future.length) return; history.push(JSON.parse(JSON.stringify(state))); state=future.pop(); renderPage(); }
+$('undoBtn').onclick=undo; $('redoBtn').onclick=redo;
+
+// ---------- Load ----------
+function wireDrop(){
+  const drop=$('drop'), input=$('fileInput');
+  drop.onclick=()=>input.click();
+  input.onchange=()=>input.files[0] && loadPdf(input.files[0]);
+  drop.ondragover=e=>{e.preventDefault(); drop.classList.add('drag');};
+  drop.ondragleave=()=>drop.classList.remove('drag');
+  drop.ondrop=e=>{e.preventDefault(); drop.classList.remove('drag'); if(e.dataTransfer.files[0]) loadPdf(e.dataTransfer.files[0]);};
+}
+wireDrop();
+$('newFileBtn').onclick=()=>{ $('workspace').classList.remove('active'); $('landing').style.display='flex'; };
+
+async function loadPdf(file){
+  pdfBytes = await file.arrayBuffer();
+  pdfDoc = await pdfjsLib.getDocument({data: pdfBytes.slice(0)}).promise;
+  pageNum=1; state={}; history=[]; future=[];
+  $('landing').style.display='none';
+  $('workspace').classList.add('active');
+  buildPageList();
+  await renderPage();
+}
+function buildPageList(){
+  const list=$('pageList'); list.innerHTML='';
+  for(let i=1;i<=pdfDoc.numPages;i++){
+    const d=document.createElement('div');
+    d.className='pagebtn'+(i===pageNum?' active':'');
+    d.textContent='Page '+i;
+    d.onclick=()=>{ pageNum=i; renderPage(); };
+    d.dataset.p=i;
+    list.appendChild(d);
+  }
+}
+function markActivePage(){
+  document.querySelectorAll('.pagebtn').forEach(d=>d.classList.toggle('active', +d.dataset.p===pageNum));
+  $('pageLabel').textContent=pageNum+' / '+pdfDoc.numPages;
+}
+
+// ---------- Render ----------
+async function renderPage(){
+  hideFloatToolbar();
+  const page = await pdfDoc.getPage(pageNum);
+  const viewport = page.getViewport({scale});
+  const canvas=$('pdfCanvas'); canvas.width=viewport.width; canvas.height=viewport.height;
+  $('pageCard').style.width=viewport.width+'px'; $('pageCard').style.height=viewport.height+'px';
+  await page.render({canvasContext:canvas.getContext('2d'), viewport}).promise;
+
+  const overlay=$('overlay'); overlay.innerHTML='';
+  overlay.style.width=viewport.width+'px'; overlay.style.height=viewport.height+'px';
+
+  const content = await page.getTextContent();
+  const st = pageState();
+  content.items.forEach((item,idx)=>{
+    if(!item.str.trim()) return;
+    const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+    const fontSize = Math.hypot(tx[2],tx[3]);
+    const edit = st.edits.find(e=>e.idx===idx);
+    const div=document.createElement('div');
+    div.className='run'; div.contentEditable='true'; div.spellcheck=false;
+    div.textContent = edit ? edit.text : item.str;
+    div.style.left=(tx[4]-2)+'px'; div.style.top=(tx[5]-fontSize-1)+'px';
+    div.style.fontSize=fontSize+'px'; div.style.minWidth=(item.width*scale)+'px'; div.style.lineHeight=(fontSize+2)+'px';
+    div.style.fontFamily = fontCss(edit&&edit.font);
+    if(edit&&edit.bold) div.style.fontWeight='700';
+    if(edit&&edit.italic) div.style.fontStyle='italic';
+    if(edit){
+      // whites out the original glyphs underneath so the new text doesn't overlap them
+      div.style.background='#fff'; div.style.color=edit.color||'#111';
+      div.style.boxShadow='0 0 0 1px rgba(0,0,0,.04)'; div.style.padding='0 2px';
+    } else { div.style.color='transparent'; }
+    div.dataset.idx=idx; div.dataset.origW=item.width; div.dataset.baseFont=fontSize/scale;
+    div.addEventListener('mousedown',e=>{ if(tool!=='select') e.preventDefault(); });
+    div.addEventListener('focus',()=>{ if(tool!=='select'){div.blur(); return;} focusedRun=div; focusedType='run'; div.classList.add('focused'); div.style.background='#fff'; div.style.color = (edit&&edit.color)||'#111'; showFloatToolbar(div); snapshot(); });
+    div.addEventListener('blur',()=>{
+      div.classList.remove('focused');
+      const txt=div.textContent;
+      const e2=st.edits.find(e=>e.idx===idx);
+      if(txt!==item.str || e2){
+        const rec={idx,text:txt,x:tx[4],y:tx[5],fontSize,pdfW:item.width,
+          color:e2?e2.color:null, align:e2?e2.align:'left',
+          font:e2?e2.font:null, bold:e2?e2.bold:false, italic:e2?e2.italic:false};
+        if(e2) Object.assign(e2,rec); else st.edits.push(rec);
+        div.style.background='#fff'; div.style.color=rec.color||'#111'; div.style.padding='0 2px'; div.style.boxShadow='0 0 0 1px rgba(0,0,0,.04)';
+      } else if(!e2){
+        div.style.color='transparent'; div.style.background='transparent'; div.style.boxShadow='none'; div.style.padding='0';
+      }
+    });
+    overlay.appendChild(div);
+  });
+  // additions
+  st.adds.forEach(a=>{
+    const div=document.createElement('div'); div.className='addbox'; div.contentEditable='true'; div.spellcheck=false;
+    div.textContent=a.text; div.style.left=a.x+'px'; div.style.top=a.y+'px'; div.style.fontSize=a.fontSize+'px'; div.style.color=a.color||'#111';
+    div.style.fontFamily=fontCss(a.font); if(a.bold) div.style.fontWeight='700'; if(a.italic) div.style.fontStyle='italic';
+    div.addEventListener('focus',()=>{ focusedRun=div; focusedType='add'; div.dataset.ref=JSON.stringify(a); div.dataset.addRef=a.__id; showFloatToolbar(div); snapshot(); });
+    div.addEventListener('blur',()=>{ a.text=div.textContent; a.fontSize=parseFloat(div.style.fontSize); a.color=div.style.color; a.font=div.dataset.font||a.font; a.bold=div.style.fontWeight==='700'; a.italic=div.style.fontStyle==='italic'; });
+    overlay.appendChild(div);
+  });
+  // marks
+  st.marks.forEach(m=>{
+    const div=document.createElement('div'); div.className='markbox '+m.mode;
+    div.style.left=m.x+'px'; div.style.top=m.y+'px'; div.style.width=m.w+'px'; div.style.height=m.h+'px';
+    overlay.appendChild(div);
+  });
+
+  wireCanvasTools(overlay);
+  markActivePage();
+  $('zoomLabel').textContent=Math.round(scale/1.3*100)+'%';
+}
+$('prevPage').onclick=()=>{ if(pageNum>1){pageNum--; renderPage();} };
+$('nextPage').onclick=()=>{ if(pdfDoc && pageNum<pdfDoc.numPages){pageNum++; renderPage();} };
+$('zoomIn').onclick=()=>{ scale=Math.min(scale*1.15,3); renderPage(); };
+$('zoomOut').onclick=()=>{ scale=Math.max(scale*0.87,0.6); renderPage(); };
+
+// ---------- Tools ----------
+document.querySelectorAll('.tool[data-tool]').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tool[data-tool]').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active'); tool=t.dataset.tool; hideFloatToolbar();
+}));
+
+function wireCanvasTools(overlay){
+  let dragStart=null, rubber=null;
+  overlay.onclick=e=>{
+    if(tool==='add' && e.target===overlay){
+      snapshot();
+      const st=pageState();
+      const rec={text:'New text', x:e.offsetX, y:e.offsetY, fontSize:16, color:'#111', align:'left'};
+      st.adds.push(rec);
+      renderPage().then(()=>{
+        const boxes=document.querySelectorAll('.addbox');
+        const last=boxes[boxes.length-1]; if(last){ last.focus(); document.execCommand('selectAll',false,null); }
+      });
+    }
+  };
+  overlay.onmousedown=e=>{
+    if(tool!=='highlight' && tool!=='redact') return;
+    dragStart={x:e.offsetX,y:e.offsetY};
+    rubber=document.createElement('div'); rubber.className='rubber';
+    rubber.style.left=dragStart.x+'px'; rubber.style.top=dragStart.y+'px';
+    overlay.appendChild(rubber);
+    const move=ev=>{
+      const x=Math.min(dragStart.x,ev.offsetX), y=Math.min(dragStart.y,ev.offsetY);
+      const w=Math.abs(ev.offsetX-dragStart.x), h=Math.abs(ev.offsetY-dragStart.y);
+      rubber.style.left=x+'px'; rubber.style.top=y+'px'; rubber.style.width=w+'px'; rubber.style.height=h+'px';
+    };
+    const up=ev=>{
+      overlay.removeEventListener('mousemove',move); overlay.removeEventListener('mouseup',up);
+      const x=Math.min(dragStart.x,ev.offsetX||dragStart.x), y=Math.min(dragStart.y,ev.offsetY||dragStart.y);
+      const w=Math.abs((ev.offsetX||dragStart.x)-dragStart.x), h=Math.abs((ev.offsetY||dragStart.y)-dragStart.y);
+      rubber.remove();
+      if(w>4 && h>4){ snapshot(); pageState().marks.push({x,y,w,h,mode:tool}); renderPage(); }
+    };
+    overlay.addEventListener('mousemove',move); overlay.addEventListener('mouseup',up);
+  };
+}
+
+// ---------- Floating toolbar ----------
+function showFloatToolbar(div){
+  const ft=$('floatToolbar'); ft.style.display='flex';
+  if(window.innerWidth>820){
+    const r=div.getBoundingClientRect(); const stageR=$('stage').getBoundingClientRect();
+    ft.style.left=(r.left-stageR.left+$('stage').scrollLeft)+'px';
+    ft.style.top=(r.top-stageR.top+$('stage').scrollTop-40)+'px';
+  }
+  $('ftColor').value = rgbToHex(getComputedStyle(div).color);
+  $('ftBold').classList.toggle('on', getComputedStyle(div).fontWeight>='700');
+  $('ftItalic').classList.toggle('on', getComputedStyle(div).fontStyle==='italic');
+  const fam=getComputedStyle(div).fontFamily;
+  $('ftFont').value = fam.includes('Times') ? 'TimesRoman' : fam.includes('JetBrains') ? 'Courier' : 'Helvetica';
+}
+function hideFloatToolbar(){ $('floatToolbar').style.display='none'; focusedRun=null; }
+function rgbToHex(rgb){
+  const m=rgb.match(/\d+/g); if(!m) return '#000000';
+  return '#'+m.slice(0,3).map(x=>(+x).toString(16).padStart(2,'0')).join('');
+}
+$('ftBigger').onclick=()=>{ if(!focusedRun) return; const s=parseFloat(getComputedStyle(focusedRun).fontSize)+1; focusedRun.style.fontSize=s+'px'; };
+$('ftSmaller').onclick=()=>{ if(!focusedRun) return; const s=Math.max(6,parseFloat(getComputedStyle(focusedRun).fontSize)-1); focusedRun.style.fontSize=s+'px'; };
+$('ftColor').oninput=e=>{ if(focusedRun) focusedRun.style.color=e.target.value; };
+$('ftAlign').onchange=e=>{ if(focusedRun) focusedRun.style.textAlign=e.target.value; };
+$('ftFont').onchange=e=>{ if(focusedRun){ focusedRun.dataset.font=e.target.value; focusedRun.style.fontFamily=fontCss(e.target.value); } };
+$('ftBold').onclick=()=>{ if(!focusedRun) return; const on=$('ftBold').classList.toggle('on'); focusedRun.style.fontWeight=on?'700':'400'; };
+$('ftItalic').onclick=()=>{ if(!focusedRun) return; const on=$('ftItalic').classList.toggle('on'); focusedRun.style.fontStyle=on?'italic':'normal'; };
+$('ftExport').onclick=()=>{ if(focusedRun) focusedRun.blur(); $('exportBtn').click(); };
+$('ftDelete').onclick=()=>{
+  if(!focusedRun) return;
+  if(focusedType==='add'){ const st=pageState(); st.adds=st.adds.filter(a=>a.text!==undefined && (focusedRun.dataset.ref?JSON.stringify(a)!==focusedRun.dataset.ref:true)); }
+  focusedRun.textContent=''; focusedRun.blur(); hideFloatToolbar(); renderPage();
+};
+
+// ---------- Rotate / Delete page ----------
+$('rotateBtn').onclick=()=>{
+  const cur=pageOps.rotations[pageNum-1]||0;
+  pageOps.rotations[pageNum-1]=(cur+90)%360;
+  $('pdfCanvas').style.transform='rotate('+pageOps.rotations[pageNum-1]+'deg)';
+  $('overlay').style.transform='rotate('+pageOps.rotations[pageNum-1]+'deg)';
+};
+$('deletePageBtn').onclick=()=>{
+  if(!confirm('Mark page '+pageNum+' for removal on export?')) return;
+  pageOps.deleted[pageNum-1]=true;
+  const btn=document.querySelector('.pagebtn[data-p="'+pageNum+'"]');
+  if(btn){ btn.style.textDecoration='line-through'; btn.style.opacity='.4'; }
+};
+
+// ---------- Find & Replace ----------
+$('findBtn').onclick=async()=>{
+  const find=prompt('Find text (exact match, current whole document):'); if(!find) return;
+  const replace=prompt('Replace with:'); if(replace===null) return;
+  snapshot();
+  let count=0;
+  const pages=await allPagesText();
+  pages.forEach(p=>{
+    const st=pageState(p.i-1);
+    p.items.forEach((item,idx)=>{
+      if(item.str===find){
+        const tx=pdfjsLib.Util.transform(p.vp.transform,item.transform);
+        const fontSize=Math.hypot(tx[2],tx[3]);
+        const ex=st.edits.find(e=>e.idx===idx);
+        const rec={idx,text:replace,x:tx[4],y:tx[5],fontSize,pdfW:item.width,
+          color:ex?ex.color:null, align:ex?ex.align:'left', font:ex?ex.font:null, bold:ex?ex.bold:false, italic:ex?ex.italic:false};
+        if(ex) Object.assign(ex,rec); else st.edits.push(rec);
+        count++;
+      }
+    });
+  });
+  alert(count? ('Replaced '+count+' exact match(es) across the document.') : 'No exact matches found (must match a single text run exactly).');
+  renderPage();
+};
+
+// ---------- Keyboard shortcuts ----------
+document.addEventListener('keydown',e=>{
+  if(!(e.ctrlKey||e.metaKey)) return;
+  if(e.key==='z' && !e.shiftKey){ e.preventDefault(); undo(); }
+  else if((e.key==='z' && e.shiftKey) || e.key==='y'){ e.preventDefault(); redo(); }
+  else if(e.key==='s'){ e.preventDefault(); if(pdfDoc) $('exportBtn').click(); }
+});
+
+// ---------- AI Agent panel ----------
+$('aiToolBtn').onclick=()=>$('aiPanel').classList.add('open');
+$('closeAi').onclick=()=>$('aiPanel').classList.remove('open');
+const savedKey=localStorage.getItem('nexus_ai_key'); if(savedKey) $('apiKeyInput').value=savedKey;
+$('apiKeyInput').onchange=e=>localStorage.setItem('nexus_ai_key', e.target.value.trim());
+
+async function allPagesText(){
+  let pages=[];
+  for(let i=1;i<=pdfDoc.numPages;i++){
+    const page=await pdfDoc.getPage(i);
+    const vp=page.getViewport({scale});
+    const content=await page.getTextContent();
+    pages.push({i, vp, items:content.items});
+  }
+  return pages;
+}
+$('runRedactAgent').onclick=async()=>{
+  const status=$('agentStatus'); status.textContent='Scanning document…';
+  const emailRe=/[\w.+-]+@[\w-]+\.[\w.-]+/;
+  const phoneRe=/(\+?\d[\d\- ]{8,}\d)/;
+  const cardRe=/\b(?:\d[ -]?){13,16}\b/;
+  let found=0;
+  const pages = await allPagesText();
+  pages.forEach(p=>{
+    p.items.forEach(item=>{
+      if(!item.str.trim()) return;
+      if(emailRe.test(item.str) || phoneRe.test(item.str) || cardRe.test(item.str)){
+        const tx=pdfjsLib.Util.transform(p.vp.transform,item.transform);
+        const fontSize=Math.hypot(tx[2],tx[3]);
+        const st=pageState(p.i-1);
+        st.marks.push({x:tx[4]-2, y:tx[5]-fontSize-2, w:item.width*scale+4, h:fontSize+4, mode:'redact'});
+        found++;
+      }
+    });
+  });
+  snapshot();
+  status.textContent = found? ('Agent redacted '+found+' likely PII match(es). Review, then Export.') : 'No obvious emails/phone/card numbers found.';
+  renderPage();
+};
+$('askAiBtn').onclick=async()=>{
+  const chat=$('aiChat'); const key=$('apiKeyInput').value.trim();
+  const q=$('aiPrompt').value.trim();
+  if(!key){ chat.textContent='Add your Anthropic API key above first.'; return; }
+  if(!q){ chat.textContent='Type a question first.'; return; }
+  chat.textContent='Reading document…';
+  try{
+    const pages=await allPagesText();
+    const fullText=pages.map(p=>'--- Page '+p.i+' ---\n'+p.items.map(it=>it.str).join(' ')).join('\n\n').slice(0,12000);
+    chat.textContent='Thinking…';
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:800,
+        messages:[{role:'user',content:'Document text follows, then a question. Answer only from this document.\n\n'+fullText+'\n\nQuestion: '+q}]})
+    });
+    const data=await res.json();
+    chat.textContent = data.content ? data.content.map(c=>c.text||'').join('\n') : (data.error?.message||'No response.');
+  }catch(err){ chat.textContent='Request failed: '+err.message+' (direct browser calls need your key and may be blocked by CORS on some networks).'; }
+};
+
+// ---------- Export ----------
+$('exportBtn').onclick=async()=>{
+  const status=$('status'); status.textContent='Rendering…';
+  try{
+    const { PDFDocument, rgb, StandardFonts } = PDFLib;
+    const outDoc = await PDFDocument.load(pdfBytes);
+    const fonts={
+      Helvetica: await outDoc.embedFont(StandardFonts.Helvetica),
+      HelveticaBold: await outDoc.embedFont(StandardFonts.HelveticaBold),
+      HelveticaOblique: await outDoc.embedFont(StandardFonts.HelveticaOblique),
+      HelveticaBoldOblique: await outDoc.embedFont(StandardFonts.HelveticaBoldOblique),
+      TimesRoman: await outDoc.embedFont(StandardFonts.TimesRoman),
+      TimesRomanBold: await outDoc.embedFont(StandardFonts.TimesRomanBold),
+      TimesRomanItalic: await outDoc.embedFont(StandardFonts.TimesRomanItalic),
+      TimesRomanBoldItalic: await outDoc.embedFont(StandardFonts.TimesRomanBoldItalic),
+      Courier: await outDoc.embedFont(StandardFonts.Courier),
+      CourierBold: await outDoc.embedFont(StandardFonts.CourierBold),
+      CourierOblique: await outDoc.embedFont(StandardFonts.CourierOblique),
+      CourierBoldOblique: await outDoc.embedFont(StandardFonts.CourierBoldOblique),
+    };
+    function pickFont(base,bold,italic){
+      const b=base||'Helvetica';
+      let key=b + (bold?'Bold':'') + (italic?(b==='Helvetica'?'Oblique':(b==='Courier'?'Oblique':'Italic')):'');
+      return fonts[key]||fonts.Helvetica;
+    }
+    let pages = outDoc.getPages();
+    Object.keys(state).forEach(pIdx=>{
+      const page=pages[+pIdx]; if(!page) return; const H=page.getHeight(); const s=state[pIdx];
+      s.edits.forEach(e=>{
+        const x=e.x/scale, y=H-(e.y/scale), fs=e.fontSize/scale;
+        page.drawRectangle({x:x-1,y:y-fs*0.25,width:(e.pdfW+6),height:fs+4,color:rgb(1,1,1)});
+        const col=hexToRgb(e.color||'#000000'); const f=pickFont(e.font,e.bold,e.italic);
+        page.drawText(e.text||'', {x, y:y-fs*0.78, size:fs, font:f, color:rgb(col.r,col.g,col.b)});
+      });
+      s.adds.forEach(a=>{
+        const x=a.x/scale, y=H-(a.y/scale), fs=a.fontSize/scale;
+        const col=hexToRgb(a.color||'#000000'); const f=pickFont(a.font,a.bold,a.italic);
+        page.drawText(a.text||'', {x, y:y-fs*0.78, size:fs, font:f, color:rgb(col.r,col.g,col.b)});
+      });
+      s.marks.forEach(m=>{
+        const x=m.x/scale, y=H-(m.y/scale)-(m.h/scale), w=m.w/scale, h=m.h/scale;
+        if(m.mode==='redact') page.drawRectangle({x,y,width:w,height:h,color:rgb(0,0,0)});
+        else page.drawRectangle({x,y,width:w,height:h,color:rgb(1,0.88,0.28),opacity:0.45});
+      });
+    });
+    Object.keys(pageOps.rotations).forEach(pIdx=>{ if(pages[+pIdx]) pages[+pIdx].setRotation(PDFLib.degrees(pageOps.rotations[pIdx])); });
+    const toRemove=Object.keys(pageOps.deleted).map(Number).sort((a,b)=>b-a);
+    toRemove.forEach(idx=>outDoc.removePage(idx));
+    const bytes=await outDoc.save();
+    const blob=new Blob([bytes],{type:'application/pdf'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='edited.pdf'; a.click();
+    status.textContent='Exported ✓';
+    setTimeout(()=>status.textContent='',2500);
+  }catch(err){ status.textContent='Failed: '+err.message; status.style.color='var(--danger)'; }
+};
+function hexToRgb(hex){ const m=hex.replace('#',''); return {r:parseInt(m.substr(0,2),16)/255, g:parseInt(m.substr(2,2),16)/255, b:parseInt(m.substr(4,2),16)/255}; }
+</script>
+</body>
+</html>
